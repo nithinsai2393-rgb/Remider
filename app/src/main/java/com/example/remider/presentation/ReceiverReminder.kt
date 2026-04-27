@@ -6,75 +6,75 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.media.Ringtone
+import android.media.RingtoneManager
+import android.net.Uri
 import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.remider.MainActivity
 import com.example.remider.R
 
-import android.media.RingtoneManager
-import android.net.Uri
-import android.os.VibrationEffect
-import android.os.Vibrator
-import android.media.Ringtone
-
-class ReceiverReminder: BroadcastReceiver() {
+class ReceiverReminder : BroadcastReceiver() {
     companion object {
         private var currentRingtone: Ringtone? = null
         private var vibrator: Vibrator? = null
-        
+
         fun stopAlerts() {
-            currentRingtone?.stop()
-            currentRingtone = null
-            vibrator?.cancel()
-            vibrator = null
+            try {
+                currentRingtone?.stop()
+                currentRingtone = null
+                vibrator?.cancel()
+                vibrator = null
+            } catch (e: Exception) {
+                Log.e("ReceiverReminder", "Error stopping alerts", e)
+            }
         }
-        
-        fun startAlerts(context: Context, ringtone: Ringtone?, priority: String) {
+
+        fun startAlerts(context: Context, ringtoneUri: Uri, priority: String) {
             stopAlerts()
-            
+
             if (priority == "High") {
-                ringtone?.let {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                        it.isLooping = true
+                try {
+                    val ringtone = RingtoneManager.getRingtone(context, ringtoneUri)
+                    if (ringtone != null) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                            ringtone.isLooping = true
+                        }
+                        currentRingtone = ringtone
+                        ringtone.play()
                     }
-                    currentRingtone = it
-                    it.play()
+
+                    val v = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+                    val pattern = longArrayOf(0, 1000, 500) // Vibrate 1s, pause 0.5s
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        v.vibrate(VibrationEffect.createWaveform(pattern, 0)) // 0 means repeat
+                    } else {
+                        @Suppress("DEPRECATION")
+                        v.vibrate(pattern, 0)
+                    }
+                    vibrator = v
+                } catch (e: Exception) {
+                    Log.e("ReceiverReminder", "Error starting alerts", e)
                 }
-                
-                val v = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
-                val pattern = longArrayOf(0, 1000, 500)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    v.vibrate(VibrationEffect.createWaveform(pattern, 0)) // 0 means repeat
-                } else {
-                    @Suppress("DEPRECATION")
-                    v.vibrate(pattern, 0)
-                }
-                vibrator = v
             }
         }
     }
 
     override fun onReceive(context: Context?, intent: Intent?) {
-        if (intent?.action == "DISMISS_NOTIFICATION") {
-            val notificationId = intent.getIntExtra("notificationId", -1)
-            
-            // Stop alerts
-            stopAlerts()
+        if (context == null || intent == null) return
 
-            if (notificationId != -1 && context != null) {
+        if (intent.action == "DISMISS_NOTIFICATION") {
+            val notificationId = intent.getIntExtra("notificationId", -1)
+            stopAlerts()
+            if (notificationId != -1) {
                 val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                 manager.cancel(notificationId)
             }
             return
         }
-
-        val message = intent?.getStringExtra("message") ?: "Reminder"
-        val priority = intent?.getStringExtra("priority") ?: "Medium"
-        val ringtoneUri = intent?.getStringExtra("ringtone") ?: ""
-        
-        createNotificationChannel(context, priority)
-        showNotification(context, 0, message, priority, ringtoneUri)
     }
 }
 
@@ -94,13 +94,8 @@ fun createNotificationChannel(context: Context?, priority: String) {
             description = "Channel for $priority priority reminders"
             if (priority == "High") {
                 enableVibration(true)
-                val pattern = LongArray(81)
-                pattern[0] = 0
-                for (i in 1..80 step 2) {
-                    pattern[i] = 1000
-                    pattern[i+1] = 500
-                }
-                vibrationPattern = pattern
+                // This pattern is for the channel itself, but manual vibrator overrides it for High
+                vibrationPattern = longArrayOf(0, 1000, 500)
             } else if (priority == "Medium") {
                 enableVibration(true)
                 vibrationPattern = longArrayOf(0, 500, 250, 500)
@@ -114,7 +109,9 @@ fun createNotificationChannel(context: Context?, priority: String) {
 
 fun showNotification(context: Context?, id: Int, message: String, priority: String, ringtoneUriString: String) {
     if (context == null) return
-    val intent = Intent(context, MainActivity::class.java)
+    val intent = Intent(context, MainActivity::class.java).apply {
+        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+    }
 
     val pendingIntent = PendingIntent.getActivity(
         context,
@@ -147,29 +144,32 @@ fun showNotification(context: Context?, id: Int, message: String, priority: Stri
         .setStyle(NotificationCompat.BigTextStyle().bigText(message))
         .setContentIntent(pendingIntent)
         .setAutoCancel(false)
-        .setOngoing(priority == "High") // High priority is ongoing until clicked
-        .setSound(if (priority == "High") null else ringtoneUri) // We play manually for high
+        .setOngoing(true) // Not swippable for any priority as requested
         .setColor(if (priority == "High") 0xFFFF5252.toInt() else 0xFF4361EE.toInt())
         .addAction(R.drawable.baseline_circle_24, "OK", dismissPendingIntent)
 
     if (priority == "High") {
         builder.setPriority(NotificationCompat.PRIORITY_MAX)
         builder.setCategory(NotificationCompat.CATEGORY_ALARM)
+        // Insistent flag makes sound repeat
         builder.setFullScreenIntent(pendingIntent, true)
         
-        try {
-            val r = RingtoneManager.getRingtone(context, ringtoneUri)
-            ReceiverReminder.startAlerts(context, r, priority)
-        } catch (e: Exception) {
-            Log.e("ReceiverReminder", "Error starting alerts", e)
-        }
+        ReceiverReminder.startAlerts(context, ringtoneUri, priority)
     } else if (priority == "Medium") {
         builder.setPriority(NotificationCompat.PRIORITY_HIGH)
+        builder.setSound(ringtoneUri)
         builder.setVibrate(longArrayOf(0, 500, 250, 500))
     } else {
-        builder.setPriority(NotificationCompat.PRIORITY_LOW)
+        builder.setPriority(NotificationCompat.PRIORITY_DEFAULT)
+        builder.setSound(ringtoneUri)
     }
 
     val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-    manager.notify(id, builder.build())
+    val notification = builder.build()
+    
+    if (priority == "High") {
+        notification.flags = notification.flags or NotificationCompat.FLAG_INSISTENT
+    }
+
+    manager.notify(id, notification)
 }

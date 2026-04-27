@@ -23,6 +23,7 @@ import androidx.lifecycle.ViewModelProvider
 import com.example.remider.domain.ReminderDatabase
 import com.example.remider.domain.RemindersRepository
 import com.example.remider.presentation.MainViewModel
+import com.example.remider.presentation.ReceiverReminder
 import com.example.remider.presentation.Reminder
 import com.example.remider.ui.theme.RemiderTheme
 
@@ -42,6 +43,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
+        // Stop any active reminder alerts (sound/vibration) when app opens
+        ReceiverReminder.stopAlerts()
+
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.light(
                 android.graphics.Color.TRANSPARENT,
