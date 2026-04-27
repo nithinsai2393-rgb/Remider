@@ -247,13 +247,13 @@ fun ReminderLocal(
                     ) {
                         CustomDropdown(
                             modifier = Modifier.weight(1f),
-                            options = listOf("No Repeat", "Daily", "Weekly"),
+                            options = listOf("No Repeat", "Daily", "Weekly", "Monthly"),
                             selectedOption = repeatType,
                             onOptionSelected = { repeatType = it }
                         )
                         CustomDropdown(
                             modifier = Modifier.weight(1f),
-                            options = listOf("Work", "Reading", "Playtime", "Health"),
+                            options = listOf("Work", "Reading", "Playtime", "Health", "Personal", "Study", "Gym", "Shopping"),
                             selectedOption = taskType,
                             onOptionSelected = { taskType = it }
                         )
@@ -383,7 +383,7 @@ fun ReminderLocal(
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 keyboardController?.hide()
                                 focusManager.clearFocus()
-                                viewModel.saveReminder(
+                                val success = viewModel.saveReminder(
                                     message,
                                     time,
                                     repeatType,
@@ -393,17 +393,23 @@ fun ReminderLocal(
                                     ringtoneUri,
                                     context
                                 )
-                                message = ""
-                                time = ""
-                                repeatType = "No Repeat"
-                                taskType = "Work"
-                                description = ""
-                                priority = "Low"
-                                ringtoneUri = ""
-                                ringtoneName = "Default"
-                                popupMessage = "✅ Reminder saved successfully"
-                                popupColor = Color(0xFF4361EE)
-                                showBottomPopup = true
+                                if (success) {
+                                    message = ""
+                                    time = ""
+                                    repeatType = "No Repeat"
+                                    taskType = "Work"
+                                    description = ""
+                                    priority = "Low"
+                                    ringtoneUri = ""
+                                    ringtoneName = "Default"
+                                    popupMessage = "✅ Reminder saved successfully"
+                                    popupColor = Color(0xFF4361EE)
+                                    showBottomPopup = true
+                                } else {
+                                    popupMessage = "⚠️ should be greater than two minutes from now to create the task or else task cant be careated"
+                                    popupColor = Color(0xFFFF5252)
+                                    showBottomPopup = true
+                                }
                             }
                         },
                         colors = ButtonDefaults.buttonColors(MaterialTheme.colorScheme.primary),
@@ -465,9 +471,9 @@ fun ReminderLocal(
 
                 CustomRow(
                     modifier = Modifier.padding(horizontal = 16.dp),
-                    options = listOf("All", "Work", "Reading", "Playtime", "Health"),
+                    options = listOf("All", "Work", "Reading", "Playtime", "Health", "Personal", "Study", "Gym", "Shopping"),
                     selectedOption = state.selectedFilter,
-                    isScrollable = true, // Set to true for horizontal scrolling
+                    isScrollable = true,
                     optionSelected = { filter ->
                         viewModel.onFilterChanged(filter)
                     }
@@ -586,16 +592,16 @@ fun ReminderItem(
         "reading" -> R.drawable.baseline_menu_book_24
         "playtime" -> R.drawable.baseline_sports_esports_24
         "health" -> R.drawable.baseline_favorite_24
+        "personal" -> R.drawable.baseline_circle_24
+        "study" -> R.drawable.baseline_menu_book_24
+        "gym" -> R.drawable.baseline_favorite_24
+        "shopping" -> R.drawable.baseline_work_24
         else -> R.drawable.outline_nest_clock_farsight_analog_24
     }
 
     Card(
         modifier = modifier
-            .fillMaxWidth()
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ) { onToggleDone() },
+            .fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (reminder.isDone) cardBackground.copy(alpha = 0.6f) else cardBackground
@@ -613,6 +619,85 @@ fun ReminderItem(
             Column(
                 modifier = Modifier.padding(16.dp)
             ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .background(
+                                if (reminder.isDone) Color.Gray.copy(alpha = 0.05f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+                                RoundedCornerShape(12.dp)
+                            )
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Image(
+                            painter = painterResource(id = R.drawable.outline_nest_clock_farsight_analog_24),
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                            colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(if (reminder.isDone) Color.Gray.copy(alpha = 0.5f) else accentColor)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = reminder.time,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (reminder.isDone) Color.Gray.copy(alpha = 0.5f) else accentColor
+                        )
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (reminder.repeatType != "No Repeat") {
+                            Text(
+                                text = reminder.repeatType,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (reminder.isDone) Color.Gray.copy(alpha = 0.3f) else MaterialTheme.colorScheme.secondary.copy(alpha = 0.6f),
+                                modifier = Modifier.padding(end = 12.dp)
+                            )
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .background(
+                                    Color(0xFFFF5252).copy(alpha = 0.1f),
+                                    RoundedCornerShape(12.dp)
+                                )
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null
+                                ) { onDelete() },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Image(
+                                painter = painterResource(id = R.drawable.baseline_close_24),
+                                contentDescription = "Delete",
+                                modifier = Modifier.size(20.dp),
+                                colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(
+                                    Color(
+                                        0xFFFF5252
+                                    )
+                                )
+                            )
+                        }
+                    }
+                }
+
+                if (reminder.description.isNotEmpty()) {
+                    Text(
+                        text = reminder.description,
+                        fontSize = 14.sp,
+                        lineHeight = 18.sp,
+                        color = if (reminder.isDone) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                        modifier = Modifier.padding(top = 10.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -698,85 +783,6 @@ fun ReminderItem(
                             fontWeight = FontWeight.Black,
                             letterSpacing = 0.5.sp
                         )
-                    }
-                }
-
-                if (reminder.description.isNotEmpty()) {
-                    Text(
-                        text = reminder.description,
-                        fontSize = 14.sp,
-                        lineHeight = 18.sp,
-                        color = if (reminder.isDone) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                        modifier = Modifier.padding(top = 10.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .background(
-                                if (reminder.isDone) Color.Gray.copy(alpha = 0.05f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
-                                RoundedCornerShape(12.dp)
-                            )
-                            .padding(horizontal = 10.dp, vertical = 6.dp)
-                    ) {
-                        Image(
-                            painter = painterResource(id = R.drawable.outline_nest_clock_farsight_analog_24),
-                            contentDescription = null,
-                            modifier = Modifier.size(14.dp),
-                            colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(if (reminder.isDone) Color.Gray.copy(alpha = 0.5f) else accentColor)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = reminder.time,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (reminder.isDone) Color.Gray.copy(alpha = 0.5f) else accentColor
-                        )
-                    }
-
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (reminder.repeatType != "No Repeat") {
-                            Text(
-                                text = reminder.repeatType,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (reminder.isDone) Color.Gray.copy(alpha = 0.3f) else MaterialTheme.colorScheme.secondary.copy(alpha = 0.6f),
-                                modifier = Modifier.padding(end = 12.dp)
-                            )
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .background(
-                                    Color(0xFFFF5252).copy(alpha = 0.1f),
-                                    RoundedCornerShape(12.dp)
-                                )
-                                .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = null
-                                ) { onDelete() },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Image(
-                                painter = painterResource(id = R.drawable.baseline_close_24),
-                                contentDescription = "Delete",
-                                modifier = Modifier.size(20.dp),
-                                colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(
-                                    Color(
-                                        0xFFFF5252
-                                    )
-                                )
-                            )
-                        }
                     }
                 }
             }

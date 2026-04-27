@@ -1,11 +1,9 @@
 package com.example.remider.presentation
 
 import android.annotation.SuppressLint
-import android.app.AlarmManager
-import android.app.PendingIntent
+import android.app.Application
 import android.content.Context
-import android.content.Intent
-import androidx.lifecycle.ViewModel
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.remider.data.RemiderState
 import com.example.remider.domain.RemindersEntity
@@ -15,17 +13,45 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
+import androidx.work.Data
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
 import java.util.Calendar
+import java.util.concurrent.TimeUnit
 
 class MainViewModel(
+    application: Application,
     private val repository: RemindersRepository
-) : ViewModel() {
+) : AndroidViewModel(application) {
 
     private val _state = MutableStateFlow(RemiderState())
     val state: StateFlow<RemiderState> = _state.asStateFlow()
 
     init {
         observeReminders()
+        rescheduleAllReminders()
+    }
+
+    private fun rescheduleAllReminders() {
+        viewModelScope.launch {
+            val reminders = repository.getAllReminders().first()
+            reminders.filter { !it.isDone }.forEach { reminder ->
+                val calendar = parseTime(reminder.time)
+                if (calendar.timeInMillis > System.currentTimeMillis()) {
+                    scheduleReminder(
+                        getApplication(),
+                        reminder.id,
+                        calendar.timeInMillis,
+                        "Reminder: ${reminder.task}",
+                        reminder.priority,
+                        reminder.ringtone,
+                        reminder.repeatType,
+                        reminder.time
+                    )
+                }
+            }
+        }
     }
 
     private fun observeReminders() {
@@ -49,16 +75,21 @@ class MainViewModel(
         priority: String,
         ringtone: String,
         context: Context
-    ) {
-        if (task.isBlank()) return
+    ): Boolean {
+        if (task.isBlank()) return false
 
         val calendar = parseTime(time)
-        val timeInMillis = calendar.timeInMillis
-        val adjustedTimeInMillis = if (timeInMillis < System.currentTimeMillis()) {
+        var timeInMillis = calendar.timeInMillis
+        val currentTime = System.currentTimeMillis()
+
+        if (timeInMillis < currentTime) {
             calendar.add(Calendar.DAY_OF_MONTH, 1)
-            calendar.timeInMillis
-        } else {
-            timeInMillis
+            timeInMillis = calendar.timeInMillis
+        }
+
+        // Check if the time is at least 2 minutes from now
+        if (timeInMillis - currentTime < 120000) {
+            return false
         }
 
         viewModelScope.launch {
@@ -75,12 +106,15 @@ class MainViewModel(
             scheduleReminder(
                 context = context,
                 id = id.toInt(),
-                timeInMillis = adjustedTimeInMillis,
+                timeInMillis = timeInMillis,
                 message = "Reminder: $task",
                 priority = priority,
-                ringtone = ringtone
+                ringtone = ringtone,
+                repeatType = repeatType,
+                timeString = time
             )
         }
+        return true
     }
 
     private fun parseTime(time: String): Calendar {
@@ -125,7 +159,9 @@ class MainViewModel(
                         timeInMillis = calendar.timeInMillis,
                         message = "Reminder: ${reminder.task}",
                         priority = reminder.priority,
-                        ringtone = reminder.ringtone
+                        ringtone = reminder.ringtone,
+                        repeatType = reminder.repeatType,
+                        timeString = reminder.time
                     )
                 }
             }
@@ -140,18 +176,7 @@ class MainViewModel(
     }
 
     private fun cancelReminder(context: Context, id: Int) {
-        val intent = Intent(context, ReceiverReminder::class.java)
-        val pendingIntent = PendingIntent.getBroadcast(
-            context,
-            id,
-            intent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_NO_CREATE
-        )
-        if (pendingIntent != null) {
-            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-            alarmManager.cancel(pendingIntent)
-            pendingIntent.cancel()
-        }
+        WorkManager.getInstance(context).cancelUniqueWork("reminder_$id")
     }
 
     fun deleteAllReminders(context: Context) {
@@ -172,35 +197,35 @@ class MainViewModel(
         timeInMillis: Long,
         message: String,
         priority: String,
-        ringtone: String
+        ringtone: String,
+        repeatType: String,
+        timeString: String
     ) {
-        val intent = Intent(context, ReceiverReminder::class.java).apply {
-            putExtra("message", message)
-            putExtra("priority", priority)
-            putExtra("ringtone", ringtone)
-        }
+        // Schedule notification 1 minute before the actual time
+        val notificationTime = timeInMillis - 60000
+        val delay = notificationTime - System.currentTimeMillis()
+        
+        if (delay < 0) return
 
-        val pendingIntent = PendingIntent.getBroadcast(
-            context,
-            id,
-            intent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        val data = Data.Builder()
+            .putInt("id", id)
+            .putString("message", message)
+            .putString("priority", priority)
+            .putString("ringtone", ringtone)
+            .putString("repeatType", repeatType)
+            .putString("timeString", timeString)
+            .build()
+
+        val reminderWorkRequest = OneTimeWorkRequestBuilder<ReminderWorker>()
+            .setInitialDelay(delay, TimeUnit.MILLISECONDS)
+            .setInputData(data)
+            .addTag("reminder_$id")
+            .build()
+
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            "reminder_$id",
+            androidx.work.ExistingWorkPolicy.REPLACE,
+            reminderWorkRequest
         )
-
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        try {
-            alarmManager.setExact(
-                AlarmManager.RTC_WAKEUP,
-                timeInMillis,
-                pendingIntent
-            )
-        } catch (e: SecurityException) {
-            // Fallback for devices where SCHEDULE_EXACT_ALARM is denied
-            alarmManager.set(
-                AlarmManager.RTC_WAKEUP,
-                timeInMillis,
-                pendingIntent
-            )
-        }
     }
 }

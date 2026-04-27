@@ -202,8 +202,8 @@ fun CustomRow(
                 if (isScrollable) Modifier.horizontalScroll(rememberScrollState())
                 else Modifier.fillMaxWidth()
             )
-            .padding(vertical = 6.dp),
-        horizontalArrangement = if (isScrollable) Arrangement.spacedBy(4.dp) else Arrangement.spacedBy(8.dp),
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         options.forEach { option ->
@@ -211,21 +211,21 @@ fun CustomRow(
 
             Box(
                 modifier = Modifier
-                    .then(if (isScrollable) Modifier.width(IntrinsicSize.Min) else Modifier.weight(1f))
-                    .height(38.dp)
+                    .then(if (isScrollable) Modifier.wrapContentWidth() else Modifier.weight(1f))
+                    .height(40.dp)
                     .snakeBorder(
                         enabled = isSelected,
                         color = accentColor,
-                        shape = RoundedCornerShape(19.dp)
+                        shape = RoundedCornerShape(20.dp)
                     )
                     .background(
                         if (isSelected) Color.Transparent else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                        RoundedCornerShape(19.dp)
+                        RoundedCornerShape(20.dp)
                     )
                     .then(
                         if (isSelected) Modifier
                             .padding(2.dp)
-                            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(17.dp))
+                            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(18.dp))
                         else Modifier
                     )
                     .clickable(
@@ -234,7 +234,7 @@ fun CustomRow(
                     ) {
                         optionSelected(option)
                     }
-                    .padding(horizontal = 4.dp),
+                    .padding(horizontal = 20.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(

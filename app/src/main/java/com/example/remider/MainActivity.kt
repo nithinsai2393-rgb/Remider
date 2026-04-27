@@ -34,13 +34,14 @@ class MainActivity : ComponentActivity() {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 val database = ReminderDatabase.getDatabase(applicationContext)
                 val repository = RemindersRepository(database.reminderDao())
-                return MainViewModel(repository) as T
+                return MainViewModel(application, repository) as T
             }
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.light(
                 android.graphics.Color.TRANSPARENT,
