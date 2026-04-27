@@ -168,7 +168,7 @@ fun showNotification(context: Context?, id: Int, message: String, priority: Stri
     val notification = builder.build()
     
     if (priority == "High") {
-        notification.flags = notification.flags or NotificationCompat.FLAG_INSISTENT
+        notification.flags = notification.flags or android.app.Notification.FLAG_INSISTENT
     }
 
     manager.notify(id, notification)
