@@ -11,6 +11,7 @@ import android.media.Ringtone
 import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
+import android.os.VibrationEffect
 import android.os.Vibrator
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -30,6 +31,33 @@ class ReceiverReminder : BroadcastReceiver() {
                 vibrator = null
             } catch (e: Exception) {
                 Log.e("ReceiverReminder", "Error stopping alerts", e)
+            }
+        }
+
+        fun startAlerts(context: Context, priority: String) {
+            stopAlerts()
+
+            if (priority == "High") {
+                try {
+                    val v = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as android.os.VibratorManager
+                        vibratorManager.defaultVibrator
+                    } else {
+                        @Suppress("DEPRECATION")
+                        context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+                    }
+                    
+                    val pattern = longArrayOf(0, 1000, 500) // Vibrate 1s, pause 0.5s
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        v.vibrate(VibrationEffect.createWaveform(pattern, 0)) // 0 means loop
+                    } else {
+                        @Suppress("DEPRECATION")
+                        v.vibrate(pattern, 0)
+                    }
+                    vibrator = v
+                } catch (e: Exception) {
+                    Log.e("ReceiverReminder", "Error starting vibration", e)
+                }
             }
         }
     }
@@ -135,6 +163,8 @@ fun showNotification(context: Context?, id: Int, message: String, priority: Stri
         builder.setPriority(NotificationCompat.PRIORITY_MAX)
         builder.setVibrate(longArrayOf(0, 1000, 500))
         builder.setFullScreenIntent(pendingIntent, true)
+        
+        ReceiverReminder.startAlerts(context, priority)
     } else if (priority == "Medium") {
         builder.setPriority(NotificationCompat.PRIORITY_HIGH)
         builder.setVibrate(longArrayOf(0, 500, 250, 500))

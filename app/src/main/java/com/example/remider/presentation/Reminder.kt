@@ -590,7 +590,7 @@ fun ReminderItem(
         "health" -> R.drawable.baseline_favorite_24
         "personal" -> R.drawable.baseline_circle_24
         "study" -> R.drawable.baseline_menu_book_24
-        "gym" -> R.drawable.baseline_favorite_24
+        "gym" -> R.drawable.outline_exercise_24
         "shopping" -> R.drawable.baseline_work_24
         else -> R.drawable.outline_nest_clock_farsight_analog_24
     }
