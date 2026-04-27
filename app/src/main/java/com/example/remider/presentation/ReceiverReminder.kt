@@ -47,7 +47,14 @@ class ReceiverReminder : BroadcastReceiver() {
                         ringtone.play()
                     }
 
-                    val v = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+                    val v = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as android.os.VibratorManager
+                        vibratorManager.defaultVibrator
+                    } else {
+                        @Suppress("DEPRECATION")
+                        context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+                    }
+
                     val pattern = longArrayOf(0, 1000, 500) // Vibrate 1s, pause 0.5s
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                         v.vibrate(VibrationEffect.createWaveform(pattern, 0)) // 0 means repeat
@@ -75,6 +82,15 @@ class ReceiverReminder : BroadcastReceiver() {
             }
             return
         }
+
+        // Handle regular reminder
+        val id = intent.getIntExtra("id", 0)
+        val message = intent.getStringExtra("message") ?: "Reminder"
+        val priority = intent.getStringExtra("priority") ?: "Medium"
+        val ringtoneUri = intent.getStringExtra("ringtone") ?: ""
+        
+        createNotificationChannel(context, priority)
+        showNotification(context, id, message, priority, ringtoneUri)
     }
 }
 
